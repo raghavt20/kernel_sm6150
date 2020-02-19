@@ -117,3 +117,4 @@ obj-$(CONFIG_TOUCHSCREEN_NVT_F7B)	+= lct_tp_work.o
 obj-$(CONFIG_TOUCHSCREEN_NVT_F7B)	+= lct_tp_gesture.o
 obj-$(CONFIG_TOUCHSCREEN_NVT_F7B)	+= lct_tp_grip_area.o
 obj-$(CONFIG_TOUCHSCREEN_XIAOMI_TOUCHFEATURE) += xiaomi/
+obj-$(CONFIG_TOUCHSCREEN_COMMON)	+= tp_common.o
