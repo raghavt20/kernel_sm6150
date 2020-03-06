@@ -44,6 +44,12 @@
 #include "../xiaomi/xiaomi_touch.h"
 #endif
 
+#if WAKEUP_GESTURE
+#ifdef CONFIG_TOUCHSCREEN_COMMON
+#include <linux/input/tp_common.h>
+#endif
+#endif
+
 /*****************************************************************************
 * Private constant and macro definitions using #define
 *****************************************************************************/
@@ -85,6 +91,33 @@ static int lct_tp_set_screen_angle_callback(unsigned int angle);
 /* modify end by zhangchaofan@longcheer.com for angle inhibit, 2019-01-14 */
 
 /* modify begin by zhangchaofan@longcheer.com for tp_gesture, 2018-12-25 */
+#ifdef CONFIG_TOUCHSCREEN_COMMON
+static ssize_t double_tap_show(struct kobject *kobj,
+                               struct kobj_attribute *attr, char *buf)
+{
+    return sprintf(buf, "%d\n", ts->db_wakeup);
+}
+
+static ssize_t double_tap_store(struct kobject *kobj,
+                                struct kobj_attribute *attr, const char *buf,
+                                size_t count)
+{
+    int rc, val;
+
+    rc = kstrtoint(buf, 10, &val);
+    if (rc)
+    return -EINVAL;
+
+    ts->db_wakeup = !!val;
+    return count;
+}
+
+static struct tp_common_ops double_tap_ops = {
+    .show = double_tap_show,
+    .store = double_tap_store
+};
+#endif
+
 #if FTS_GESTURE_EN
 static int lct_tp_gesture_node_callback(bool flag);
 static int fts_gesture_switch(struct input_dev *dev, unsigned int type, unsigned int code, int value);
@@ -796,6 +829,13 @@ static int fts_read_touchdata(struct fts_ts_data *data)
         FTS_INFO("succuss to get gesture data in irq handler");
         return 1;
     }
+#ifdef CONFIG_TOUCHSCREEN_COMMON
+    ret = tp_common_set_double_tap_ops(&double_tap_ops);
+    if (ret < 0) {
+        NVT_ERR("%s: Failed to create double_tap node err=%d\n",
+                __func__, ret);
+    }
+#endif
 #endif
 
 #if FTS_POINT_REPORT_CHECK_EN
