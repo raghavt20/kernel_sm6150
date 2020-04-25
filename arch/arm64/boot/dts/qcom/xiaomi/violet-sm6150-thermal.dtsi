@@ -55,4 +55,12 @@
     quiet-therm-step {
         status = "disabled";
     };
+
+    lmh-dcvs-00 {
+        status = "disabled";
+    };
+
+    lmh-dcvs-01 {
+        status = "disabled";
+    };
 };
