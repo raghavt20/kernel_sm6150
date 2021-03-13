@@ -3192,7 +3192,12 @@ static int smb5_init_hw(struct smb5 *chip)
 	 *   boots with charger connected.
 	 * - Initialize flash module for PMI632
 	 */
+#ifdef CONFIG_MACH_XIAOMI_VIOLET
+	if ((chg->chg_param.smb_version == PMI632_SUBTYPE)
+		|| (chg->chg_param.smb_version == PM6150_SUBTYPE)) {
+#else
 	if (chg->chg_param.smb_version == PMI632_SUBTYPE) {
+#endif
 		schgm_flash_init(chg);
 	}
 
