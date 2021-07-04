@@ -29,7 +29,7 @@
 #include "nt36xxx_mem_map.h"
 
 #include "../lct_tp_info.h"
-#define NVT_DEBUG 0
+#define NVT_DEBUG 1
 
 //---GPIO number---
 #define NVTTOUCH_RST_PIN 88
@@ -51,7 +51,7 @@
 #if NVT_DEBUG
 #define NVT_LOG(fmt, args...)    pr_err("[%s] %s %d: " fmt, NVT_I2C_NAME, __func__, __LINE__, ##args)
 #else
-#define NVT_LOG(fmt, args...)    pr_debug("[%s] %s %d: " fmt, NVT_I2C_NAME, __func__, __LINE__, ##args)
+#define NVT_LOG(fmt, args...)    pr_info("[%s] %s %d: " fmt, NVT_I2C_NAME, __func__, __LINE__, ##args)
 #endif
 #define NVT_ERR(fmt, args...)    pr_err("[%s] %s %d: " fmt, NVT_I2C_NAME, __func__, __LINE__, ##args)
 /* add begin by zhangchaofan for LOGV log, 2018-09-06*/
@@ -152,6 +152,11 @@ struct nvt_ts_data {
 	uint16_t nvt_pid;
 	uint8_t xbuf[1025];
 	struct mutex xbuf_lock;
+#ifdef CONFIG_TOUCHSCREEN_XIAOMI_TOUCHFEATURE
+	u8 palm_sensor_switch;
+	bool palm_sensor_changed;
+	bool gamemode_enabled;
+#endif
 	struct mutex reg_lock;
 	struct device *nvt_touch_dev;
 	struct class *nvt_tp_class;
