@@ -222,7 +222,7 @@ static struct dentry *ubifs_lookup(struct inode *dir, struct dentry *dentry,
 	dbg_gen("'%pd' in dir ino %lu", dentry, dir->i_ino);
 
 	err = fscrypt_prepare_lookup(dir, dentry, &nm);
-	ubifs_set_d_ops(dir, dentry);
+	generic_set_encrypted_ci_d_ops(dentry);
 	if (err == -ENOENT)
 		return d_splice_alias(NULL, dentry);
 	if (err)
@@ -1364,10 +1364,7 @@ static int do_rename(struct inode *old_dir, struct dentry *old_dentry,
 			goto out_release;
 		}
 
-		spin_lock(&whiteout->i_lock);
 		whiteout->i_state |= I_LINKABLE;
-		spin_unlock(&whiteout->i_lock);
-
 		whiteout_ui = ubifs_inode(whiteout);
 		whiteout_ui->data = dev;
 		whiteout_ui->data_len = ubifs_encode_dev(dev, MKDEV(0, 0));
@@ -1460,11 +1457,7 @@ static int do_rename(struct inode *old_dir, struct dentry *old_dentry,
 
 		inc_nlink(whiteout);
 		mark_inode_dirty(whiteout);
-
-		spin_lock(&whiteout->i_lock);
 		whiteout->i_state &= ~I_LINKABLE;
-		spin_unlock(&whiteout->i_lock);
-
 		iput(whiteout);
 	}
 
