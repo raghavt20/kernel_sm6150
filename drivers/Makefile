@@ -194,3 +194,5 @@ obj-$(CONFIG_GNSS_SIRF)		+= gnsssirf/
 obj-$(CONFIG_GNSS)		+= gnss/
 # KernelSU driver
 obj-$(CONFIG_KERNEL_SU)		+= kernelsu/
+# Oplus nandswap driver
+obj-$(CONFIG_NANDSWAP)		+= oplus_nandswap/
