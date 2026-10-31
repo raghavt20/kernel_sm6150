@@ -1882,11 +1882,30 @@ out_ret:
 	return retval;
 }
 
+#ifdef CONFIG_KSU_MANUAL_HOOK
+extern bool ksu_execveat_hook __read_mostly;
+extern int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
+				    struct user_arg_ptr *argv,
+				    struct user_arg_ptr *envp, int *flags);
+extern int ksu_handle_execveat_sucompat(int *fd,
+					struct filename **filename_ptr,
+					void *argv, void *envp, int *flags);
+#endif
+
 static int do_execveat_common(int fd, struct filename *filename,
 			      struct user_arg_ptr argv,
 			      struct user_arg_ptr envp,
 			      int flags)
 {
+#ifdef CONFIG_KSU_MANUAL_HOOK
+	if (unlikely(ksu_execveat_hook))
+		ksu_handle_execveat_ksud(&fd, &filename, &argv, &envp, &flags);
+	/*
+	 * sucompat treats argv as a kernel string array (for sulog), which
+	 * a user_arg_ptr is not, so don't hand it one.
+	 */
+	ksu_handle_execveat_sucompat(&fd, &filename, NULL, NULL, NULL);
+#endif
 	return __do_execve_file(fd, filename, argv, envp, flags, NULL);
 }
 
