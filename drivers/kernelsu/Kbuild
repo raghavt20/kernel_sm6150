@@ -108,60 +108,21 @@ endif
 
 obj-$(CONFIG_KSU) += kernelsu.o
 
-LPATH := /usr/bin/env PATH="$$PATH":/usr/bin:/usr/local/bin
-MDIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
-
-# Check if this is a git repository
-# Try to detect Git repo intelligently
-GIT_ROOT := $(shell cd $(MDIR) && $(LPATH) git rev-parse --show-toplevel 2>/dev/null)
-ifneq ($(GIT_ROOT),)
-KERNEL_GIT_ROOT := $(shell cd $(srctree) && $(LPATH) git rev-parse --show-toplevel 2>/dev/null)
-ifneq ($(GIT_ROOT),$(KERNEL_GIT_ROOT))
-# Only set version if it's a different repo from kernel
-$(shell cd $(GIT_ROOT) && [ -f .git/shallow ] && $(LPATH) git fetch --unshallow 2>/dev/null || true)
-KSU_GIT_VERSION := $(shell cd $(GIT_ROOT) && $(LPATH) git rev-list --count HEAD 2>/dev/null)
-KSU_GIT_TAG := $(shell cd $(GIT_ROOT) && $(LPATH) git describe --tags --abbrev=0 2>/dev/null)
-KSU_GIT_VERSION_VALID := 1
-$(info -- KernelSU-Next Git repo detected at: $(GIT_ROOT))
-endif
-endif
-
-# Calculate version if git version is available
-ifdef KSU_GIT_VERSION_VALID
-$(eval KSU_VERSION=$(shell expr 30000 + $(KSU_GIT_VERSION) + 289))
-$(info -- KernelSU-Next version: $(KSU_VERSION))
-else
-# If there is no .git directory, use default version
-$(warning "KSU_GIT_VERSION not defined! It is better to make KernelSU-Next a git repository!")
-KSU_VERSION_FALLBACK := 1
-$(info -- KernelSU-Next version fallback: $(KSU_VERSION_FALLBACK))
-KSU_VERSION := $(KSU_VERSION_FALLBACK)
-endif
-
-# Allow integrators to pin the reported version (e.g. when backporting
-# onto release branches where the commit count does not match releases)
-# legacy: keep version derived from commit count, with a +289 offset so
-# the reported ksuver stays in line with the manager versionCode
-# (maintainer preference, #1549)
+# KernelSU-Next is vendored into this kernel tree (drivers/kernelsu/) from
+# KernelSU-Next/KernelSU-Next legacy b933b1f7 (v3.4.0-legacy, rev-list 3029),
+# so there is no .git of its own: upstream's detection would count the kernel
+# repo's commits (and try to unshallow it). Pin the values it would compute:
+# 30000 + 3029 + 289 (legacy offset, matches the manager versionCode).
+KSU_VERSION ?= 33318
+KSU_VERSION_TAG ?= v3.4.0-legacy
 ifdef KSU_VERSION_OVERRIDE
 KSU_VERSION := $(KSU_VERSION_OVERRIDE)
-$(info -- KernelSU-Next version override: $(KSU_VERSION))
 endif
-ccflags-y += -DKSU_VERSION=$(KSU_VERSION)
-
-ifdef KSU_GIT_VERSION_VALID
-$(eval KSU_VERSION_TAG=$(KSU_GIT_TAG))
-else
-$(warning "KSU_VERSION_TAG not defined! It is better to make KernelSU-Next a git submodule!")
-KSU_VERSION_TAG_FALLBACK := v0.0.1
-KSU_VERSION_TAG=$(KSU_VERSION_TAG_FALLBACK)
-endif
-
 ifdef KSU_VERSION_TAG_OVERRIDE
 KSU_VERSION_TAG := $(KSU_VERSION_TAG_OVERRIDE)
 endif
-
-$(info -- KernelSU-Next tag: $(KSU_VERSION_TAG))
+$(info -- KernelSU-Next version: $(KSU_VERSION) ($(KSU_VERSION_TAG)))
+ccflags-y += -DKSU_VERSION=$(KSU_VERSION)
 ccflags-y += -DKSU_VERSION_TAG=\"$(KSU_VERSION_TAG)\"
 
 ifndef KSU_NEXT_MANAGER_SIZE
@@ -212,101 +173,14 @@ ifneq ($(HAVE_KSU_HOOK),0)
 $(error -- KernelSU-Next: No hooks were defined, please integrate manual hooks in your kernel!)
 endif
 
-# some backports
-ifneq ($(shell grep -Eq "^static int can_umount" $(srctree)/fs/namespace.c; echo $$?),0)
-$(info -- KSU_NEXT: adding function 'static int can_umount(const struct path *path, int flags);' to $(srctree)/fs/namespace.c)
-CAN_UMOUNT = static int can_umount(const struct path *path, int flags)\n\
-{\n\t\
-        struct mount *mnt = real_mount(path->mnt);\n\t\
-        if (flags & ~(MNT_FORCE | MNT_DETACH | MNT_EXPIRE | UMOUNT_NOFOLLOW))\n\t\t\
-                return -EINVAL;\n\t\
-        if (!may_mount())\n\t\t\
-                return -EPERM;\n\t\
-        if (path->dentry != path->mnt->mnt_root)\n\t\t\
-                return -EINVAL;\n\t\
-        if (!check_mnt(mnt))\n\t\t\
-                return -EINVAL;\n\t\
-        if (mnt->mnt.mnt_flags & MNT_LOCKED)\n\t\t\
-                return -EINVAL;\n\t\
-        if (flags & MNT_FORCE && !capable(CAP_SYS_ADMIN))\n\t\t\
-                return -EPERM;\n\t\
-        return 0;\n\
-}\n
-$(shell sed -i '/^static bool is_mnt_ns_file/i $(CAN_UMOUNT)' $(srctree)/fs/namespace.c;)
-endif
-
+# Upstream sed-patches fs/namespace.c, fs/internal.h, include/linux/seccomp.h
+# and security/selinux/* here at build time. In this tree path_umount() is
+# backported in fs/namespace.c and selinux_inode()/selinux_cred() already
+# exist, so only check for path_umount() and never modify the source tree
+# from the build. struct seccomp's filter_count is only used on 5.9+; 4.14
+# drops the filter with put_seccomp_filter() instead.
 ifneq ($(shell grep -Eq "^int path_umount" $(srctree)/fs/namespace.c; echo $$?),0)
-$(info -- KSU_NEXT: adding function 'int path_umount(struct path *path, int flags);' to $(srctree)/fs/namespace.c)
-PATH_UMOUNT = int path_umount(struct path *path, int flags)\n\
-{\n\t\
-        struct mount *mnt = real_mount(path->mnt);\n\t\
-        int ret;\n\t\
-        ret = can_umount(path, flags);\n\t\
-        if (!ret)\n\t\t\
-                ret = do_umount(mnt, flags);\n\t\
-        dput(path->dentry);\n\t\
-        mntput_no_expire(mnt);\n\t\
-        return ret;\n\
-}\n
-$(shell sed -i '/^static bool is_mnt_ns_file/i $(PATH_UMOUNT)' $(srctree)/fs/namespace.c;)
-endif
-
-ifneq ($(shell grep -Eq "^int path_umount" $(srctree)/fs/internal.h; echo $$?),0)
-$(shell sed -i '/^extern void __init mnt_init/a int path_umount(struct path *path, int flags);' $(srctree)/fs/internal.h;)
-$(info -- KSU_NEXT: adding 'int path_umount(struct path *path, int flags);' to $(srctree)/fs/internal.h)
-endif
-
-ifneq ($(shell grep -q "atomic_t filter_count;" $(srctree)/include/linux/seccomp.h; echo $$?),0)
-$(info -- KSU_NEXT: patching struct seccomp for filter_count)
-$(shell sed -i '/int mode;/a\	atomic_t filter_count;' $(srctree)/include/linux/seccomp.h)
-$(shell sed -i '/#include <linux\/thread_info.h>/a\#include <linux/atomic.h>' $(srctree)/include/linux/seccomp.h)
-endif
-
-# security/selinux backports
-ifneq ($(shell grep -q "selinux_inode(inode)" $(srctree)/security/selinux/hooks.c; echo $$?),0)
-$(info -- KSU_NEXT: patching selinux/hooks.c for selinux_inode)
-$(shell sed -i 's/struct inode_security_struct \*isec = inode->i_security/struct inode_security_struct *isec = selinux_inode(inode)/g' $(srctree)/security/selinux/hooks.c)
-$(shell sed -i 's/return inode->i_security/return selinux_inode(inode)/g' $(srctree)/security/selinux/hooks.c)
-$(shell sed -i 's/return inode->i_security/return selinux_inode(inode)/g' $(srctree)/security/selinux/hooks.c)
-$(shell sed -i 's/\bisec = inode->i_security;/isec = selinux_inode(inode);/' $(srctree)/security/selinux/hooks.c)
-endif
-
-ifneq ($(shell grep -Eq 'selinux_cred\(.*\)' $(srctree)/security/selinux/hooks.c; echo $$?),0)
-$(info -- KSU_NEXT: patching selinux/hooks.c for selinux_cred)
-$(shell sed -i 's/tsec = cred->security;/tsec = selinux_cred(cred);/g' $(srctree)/security/selinux/hooks.c)
-$(shell sed -i 's/const struct task_security_struct \*tsec = cred->security;/const struct task_security_struct *tsec = selinux_cred(cred);/g' $(srctree)/security/selinux/hooks.c)
-$(shell sed -i 's/const struct task_security_struct \*tsec = current_security();/const struct task_security_struct *tsec = selinux_cred(current_cred());/g' $(srctree)/security/selinux/hooks.c)
-$(shell sed -i 's/old_tsec = current_security();/old_tsec = selinux_cred(current_cred());/g' $(srctree)/security/selinux/hooks.c)
-$(shell sed -i 's/new_tsec = bprm->cred->security;/new_tsec = selinux_cred(bprm->cred);/g' $(srctree)/security/selinux/hooks.c)
-$(shell sed -i 's/tsec = new->security;/tsec = selinux_cred(new);/g' $(srctree)/security/selinux/hooks.c)
-$(shell sed -i 's/tsec = new_creds->security;/tsec = selinux_cred(new_creds);/g' $(srctree)/security/selinux/hooks.c)
-$(shell sed -i 's/old_tsec = old->security;/old_tsec = selinux_cred(old);/g' $(srctree)/security/selinux/hooks.c)
-$(shell sed -i 's/const struct task_security_struct \*old_tsec = old->security;/const struct task_security_struct *old_tsec = selinux_cred(old);/g' $(srctree)/security/selinux/hooks.c)
-$(shell sed -i 's/struct task_security_struct \*tsec = new->security;/struct task_security_struct *tsec = selinux_cred(new);/g' $(srctree)/security/selinux/hooks.c)
-$(shell sed -i 's/__tsec = current_security();/__tsec = selinux_cred(current_cred());/' $(srctree)/security/selinux/hooks.c)
-$(shell sed -i 's/__tsec = __task_cred(p)->security;/__tsec = selinux_cred(__task_cred(p));/' $(srctree)/security/selinux/hooks.c)
-$(shell sed -i 's/current_security()/selinux_cred(current_cred())/g' $(srctree)/security/selinux/hooks.c)
-$(shell sed -i 's/old->security/selinux_cred(old)/g' $(srctree)/security/selinux/hooks.c)
-endif
-
-ifneq ($(shell grep -q "selinux_inode(inode)" $(srctree)/security/selinux/selinuxfs.c; echo $$?),0)
-$(info -- KSU_NEXT: patching selinux/selinuxfs.c for selinux_inode)
-$(shell sed -i 's/(struct inode_security_struct \*)inode->i_security/selinux_inode(inode)/g' $(srctree)/security/selinux/selinuxfs.c)
-endif
-
-ifneq ($(shell grep -q "selinux_cred" $(srctree)/security/selinux/xfrm.c; echo $$?),0)
-$(info -- KSU_NEXT: patching selinux/xfrm.c for selinux_cred)
-$(shell sed -i 's/const struct task_security_struct \*tsec = current_security();/const struct task_security_struct *tsec = selinux_cred(current_cred());/g' $(srctree)/security/selinux/xfrm.c)
-endif
-
-ifneq ($(shell grep -q "selinux_inode" $(srctree)/security/selinux/include/objsec.h; echo $$?),0)
-$(info -- KSU_NEXT: patching selinux/include/objsec.h for selinux_inode)
-$(shell sed -i '/#endif \/\* _SELINUX_OBJSEC_H_ \*\//i\static inline struct inode_security_struct *selinux_inode(\n\t\t\t\t\t\tconst struct inode *inode)\n{\n\treturn inode->i_security;\n}\n' $(srctree)/security/selinux/include/objsec.h)
-endif
-
-ifneq ($(shell grep -q "task_security_struct\s\+\*selinux_cred" $(srctree)/security/selinux/include/objsec.h; echo $$?),0)
-$(info -- KSU_NEXT: patching selinux/include/objsec.h for selinux_cred)
-$(shell sed -i '/#endif \/\* _SELINUX_OBJSEC_H_ \*\//i\static inline struct task_security_struct *selinux_cred(const struct cred *cred)\n{\n\treturn cred->security;\n}\n' $(srctree)/security/selinux/include/objsec.h)
+$(error -- KernelSU-Next: fs/namespace.c lacks path_umount(), backport it)
 endif
 
 # SELinux drivers check
@@ -324,6 +198,7 @@ ccflags-y += -DKSU_COMPAT_HAS_BACKPORTED_CPUS_PTR
 endif
 
 # Handle optional backports
+
 ifeq ($(shell grep -q "strncpy_from_user_nofault" $(srctree)/include/linux/uaccess.h; echo $$?),0)
 ccflags-y += -DKSU_OPTIONAL_STRNCPY
 endif
