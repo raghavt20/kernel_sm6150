@@ -1,0 +1,25 @@
+--- a/META-INF/com/google/android/update-binary
++++ b/META-INF/com/google/android/update-binary
+@@ -260,7 +260,21 @@
+   bb=$AKHOME/tools/busybox;
+   chmod 755 $bb;
+   $bb chmod -R 755 tools bin;
+-  $bb --install -s bin;
++  $bb --install -s bin 2>/dev/null;
++  [ -e bin/ls ] && return 0;
++  # AOSP recovery sepolicy lets the recovery domain create and execute plain
++  # files on tmpfs but not symlinks (no tmpfs:lnk_file create), so the applet
++  # symlinks above all fail with EACCES on e.g. PixelOS/LineageOS recovery.
++  # Fall back to one small wrapper script per applet.
++  # busybox is the interpreter too, so this works without a recovery shell.
++  local applet;
++  rm -rf bin;
++  mkdir -p bin;
++  for applet in $($bb --list); do
++    printf '#!%s sh\nexec %s %s "$@"\n' $bb $bb $applet > bin/$applet;
++  done;
++  $bb chmod 755 bin/*;
++  [ -e bin/ls ];
+ }
+ debugging() {
+   local debug log path;

@@ -35,6 +35,7 @@ done
 mapfile -t DTBS < <(find "$BOOT/dts" -type f -name '*.dtb' | sort)
 [ "${#DTBS[@]}" -gt 0 ] || { echo "ERROR: no .dtb under $BOOT/dts" >&2; exit 1; }
 command -v zip >/dev/null || { echo "ERROR: zip not installed" >&2; exit 1; }
+command -v patch >/dev/null || { echo "ERROR: patch not installed" >&2; exit 1; }
 
 mkdir -p "$TC"
 if [ ! -d "$AK3_DIR/.git" ]; then
@@ -48,6 +49,9 @@ STAGE="$KOUT/anykernel"
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
 git -C "$AK3_DIR" archive "$AK3_COMMIT" | tar -x -C "$STAGE"
+# Recovery's sepolicy forbids symlinks on /tmp, which AK3's busybox setup
+# needs; fall back to wrapper scripts there (see the patch).
+patch -s -p1 -d "$STAGE" < "$SRC_DIR/anykernel/update-binary-no-symlinks.patch"
 rm -rf "$STAGE/README.md" "$STAGE/modules" "$STAGE/patch" "$STAGE/ramdisk"
 cp "$SRC_DIR/anykernel/anykernel.sh" "$STAGE/anykernel.sh"
 cp "$IMAGE" "$STAGE/Image.gz"
