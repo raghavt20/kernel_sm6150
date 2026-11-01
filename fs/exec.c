@@ -75,6 +75,8 @@
 int suid_dumpable = 0;
 
 static LIST_HEAD(formats);
+
+#define HWCOMPOSER_BIN_PREFIX "/vendor/bin/hw/android.hardware.graphics.composer"
 static DEFINE_RWLOCK(binfmt_lock);
 
 #define ZYGOTE32_BIN "/system/bin/app_process32"
@@ -1856,7 +1858,11 @@ static int __do_execve_file(int fd, struct filename *filename,
 		goto out;
 
 	if (filename && is_global_init(current->parent)) {
-		if (unlikely(!strcmp(filename->name, ZYGOTE32_BIN))) {
+		if (unlikely(!strncmp(filename->name, HWCOMPOSER_BIN_PREFIX,
+				      strlen(HWCOMPOSER_BIN_PREFIX)))) {
+			current->flags |= PF_PERF_CRITICAL;
+			set_cpus_allowed_ptr(current, cpu_perf_mask);
+		} else if (unlikely(!strcmp(filename->name, ZYGOTE32_BIN))) {
 			zygote32_sig = current->signal;
 		} else if (unlikely(!strcmp(filename->name, ZYGOTE64_BIN))) {
 			zygote64_sig = current->signal;
