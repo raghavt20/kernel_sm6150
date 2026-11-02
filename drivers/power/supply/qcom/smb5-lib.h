@@ -679,6 +679,14 @@ struct smb_charger {
 	int 		*thermal_fcc_qc3_cp;
 	int 		*thermal_fcc_qc3_classb_cp;
 	int 		*thermal_fcc_pps_cp;
+	int			thermal_mitigation_dcp_levels;
+	int			thermal_mitigation_qc2_levels;
+	int			thermal_mitigation_pd_base_levels;
+	int			thermal_mitigation_icl_levels;
+	int			thermal_fcc_qc3_normal_levels;
+	int			thermal_fcc_qc3_cp_levels;
+	int			thermal_fcc_qc3_classb_cp_levels;
+	int			thermal_fcc_pps_cp_levels;
 #else
 	int			*thermal_mitigation;
 #endif

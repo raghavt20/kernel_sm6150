@@ -617,6 +617,7 @@ static int smb5_parse_dt(struct smb5 *chip)
 			return -ENOMEM;
 
 		chg->thermal_levels = byte_len / sizeof(u32);
+		chg->thermal_mitigation_dcp_levels = chg->thermal_levels;
 		rc = of_property_read_u32_array(node,
 				"qcom,thermal-mitigation-dcp",
 				chg->thermal_mitigation_dcp,
@@ -636,6 +637,7 @@ static int smb5_parse_dt(struct smb5 *chip)
 			return -ENOMEM;
 
 		chg->thermal_levels = byte_len / sizeof(u32);
+		chg->thermal_mitigation_qc2_levels = chg->thermal_levels;
 		rc = of_property_read_u32_array(node,
 				"qcom,thermal-mitigation-qc2",
 				chg->thermal_mitigation_qc2,
@@ -655,6 +657,7 @@ static int smb5_parse_dt(struct smb5 *chip)
 			return -ENOMEM;
 
 		chg->thermal_levels = byte_len / sizeof(u32);
+		chg->thermal_mitigation_pd_base_levels = chg->thermal_levels;
 		rc = of_property_read_u32_array(node,
 				"qcom,thermal-mitigation-pd-base",
 				chg->thermal_mitigation_pd_base,
@@ -674,6 +677,7 @@ static int smb5_parse_dt(struct smb5 *chip)
 				return -ENOMEM;
 
 		chg->thermal_levels = byte_len / sizeof(u32);
+		chg->thermal_fcc_qc3_normal_levels = chg->thermal_levels;
 		rc = of_property_read_u32_array(node,
 				"qcom,thermal-fcc-qc3-normal",
 				chg->thermal_fcc_qc3_normal,
@@ -693,6 +697,7 @@ static int smb5_parse_dt(struct smb5 *chip)
 				return -ENOMEM;
 
 		chg->thermal_levels = byte_len / sizeof(u32);
+		chg->thermal_fcc_qc3_cp_levels = chg->thermal_levels;
 		rc = of_property_read_u32_array(node,
 				"qcom,thermal-fcc-qc3-cp",
 				chg->thermal_fcc_qc3_cp,
@@ -712,6 +717,7 @@ static int smb5_parse_dt(struct smb5 *chip)
 				return -ENOMEM;
 
 		chg->thermal_levels = byte_len / sizeof(u32);
+		chg->thermal_fcc_qc3_classb_cp_levels = chg->thermal_levels;
 		rc = of_property_read_u32_array(node,
 				"qcom,thermal-fcc-qc3-classb-cp",
 				chg->thermal_fcc_qc3_classb_cp,
@@ -731,6 +737,7 @@ static int smb5_parse_dt(struct smb5 *chip)
 				return -ENOMEM;
 
 		chg->thermal_levels = byte_len / sizeof(u32);
+		chg->thermal_fcc_pps_cp_levels = chg->thermal_levels;
 		rc = of_property_read_u32_array(node,
 				"qcom,thermal-fcc-pps-cp",
 				chg->thermal_fcc_pps_cp,
@@ -750,6 +757,7 @@ static int smb5_parse_dt(struct smb5 *chip)
 				return -ENOMEM;
 
 		chg->thermal_levels = byte_len / sizeof(u32);
+		chg->thermal_mitigation_icl_levels = chg->thermal_levels;
 		rc = of_property_read_u32_array(node,
 				"qcom,thermal-mitigation-icl",
 				chg->thermal_mitigation_icl,

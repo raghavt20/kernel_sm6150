@@ -3041,6 +3041,20 @@ static void smblib_reg_work(struct work_struct *work)
 }
 
 #ifdef CONFIG_THERMAL
+/*
+ * The thermal tables come from DT and don't all have the same length, while
+ * system_temp_level is only bounded by the length of the last one parsed. Use
+ * the last, most restrictive entry of a shorter table, and treat a table the
+ * device doesn't define as "no limit" (the callers only vote for values > 0).
+ */
+static int smblib_therm_val(const int *table, int levels, int level)
+{
+	if (!table || levels <= 0 || level < 0)
+		return 0;
+
+	return table[min(level, levels - 1)];
+}
+
 static int smblib_therm_charging(struct smb_charger *chg)
 {
 	int thermal_icl_ua = 0;
@@ -3058,33 +3072,40 @@ static int smblib_therm_charging(struct smb_charger *chg)
 
 	switch (chg->real_charger_type) {
 	case POWER_SUPPLY_TYPE_USB_HVDCP:
-		thermal_icl_ua = chg->thermal_mitigation_qc2[chg->system_temp_level];
+		thermal_icl_ua = smblib_therm_val(chg->thermal_mitigation_qc2,
+					chg->thermal_mitigation_qc2_levels, chg->system_temp_level);
 		break;
 	case POWER_SUPPLY_TYPE_USB_HVDCP_3:
 		if (chg->use_bq_pump) {
 			thermal_fcc_ua =
-				chg->thermal_fcc_qc3_cp[chg->system_temp_level];
+				smblib_therm_val(chg->thermal_fcc_qc3_cp,
+					chg->thermal_fcc_qc3_cp_levels, chg->system_temp_level);
 		} else {
 			if (chg->cp_reason == POWER_SUPPLY_CP_HVDCP3) {
 				if (chg->is_qc_class_a)
 					thermal_fcc_ua =
-						chg->thermal_fcc_qc3_cp[chg->system_temp_level];
+						smblib_therm_val(chg->thermal_fcc_qc3_cp,
+					chg->thermal_fcc_qc3_cp_levels, chg->system_temp_level);
 				else if (chg->temp_27W_enable)
 					thermal_fcc_ua =
-						chg->thermal_fcc_qc3_classb_cp[chg->system_temp_level];
+						smblib_therm_val(chg->thermal_fcc_qc3_classb_cp,
+					chg->thermal_fcc_qc3_classb_cp_levels, chg->system_temp_level);
 				else
 					thermal_fcc_ua =
-						chg->thermal_fcc_qc3_cp[chg->system_temp_level];
+						smblib_therm_val(chg->thermal_fcc_qc3_cp,
+					chg->thermal_fcc_qc3_cp_levels, chg->system_temp_level);
 
 			} else {
 				thermal_fcc_ua =
-					chg->thermal_fcc_qc3_normal[chg->system_temp_level];
+					smblib_therm_val(chg->thermal_fcc_qc3_normal,
+					chg->thermal_fcc_qc3_normal_levels, chg->system_temp_level);
 			}
 		}
 		break;
 	case POWER_SUPPLY_TYPE_USB_HVDCP_3P5:
 		thermal_fcc_ua =
-				chg->thermal_fcc_qc3_cp[chg->system_temp_level];
+				smblib_therm_val(chg->thermal_fcc_qc3_cp,
+					chg->thermal_fcc_qc3_cp_levels, chg->system_temp_level);
 		break;
 	case POWER_SUPPLY_TYPE_USB_PD:
 		if (chg->use_bq_pump) {
@@ -3092,44 +3113,53 @@ static int smblib_therm_charging(struct smb_charger *chg)
 					chg->pps_thermal_level = chg->system_temp_level;
 			pr_err("chg->pps_thermal_level=%d,chg->system_temp_level=%d\n", chg->pps_thermal_level, chg->system_temp_level);
 			thermal_fcc_ua =
-					chg->thermal_fcc_pps_cp[chg->pps_thermal_level];
+					smblib_therm_val(chg->thermal_fcc_pps_cp,
+					chg->thermal_fcc_pps_cp_levels, chg->pps_thermal_level);
 		} else {
 			if (chg->cp_reason == POWER_SUPPLY_CP_PPS) {
 				thermal_fcc_ua =
-					chg->thermal_fcc_pps_cp[chg->system_temp_level];
+					smblib_therm_val(chg->thermal_fcc_pps_cp,
+					chg->thermal_fcc_pps_cp_levels, chg->system_temp_level);
 			} else {
 				if (chg->voltage_min_uv >= PD_MICRO_5V
 						&& chg->voltage_min_uv < PD_MICRO_5P9V)
 					thermal_icl_ua =
-							chg->thermal_mitigation_pd_base[chg->system_temp_level];
+							smblib_therm_val(chg->thermal_mitigation_pd_base,
+					chg->thermal_mitigation_pd_base_levels, chg->system_temp_level);
 				else if (chg->voltage_min_uv >= PD_MICRO_5P9V
 							&& chg->voltage_min_uv < PD_MICRO_6P5V)
 					thermal_icl_ua =
-							chg->thermal_mitigation_pd_base[chg->system_temp_level]
+							smblib_therm_val(chg->thermal_mitigation_pd_base,
+					chg->thermal_mitigation_pd_base_levels, chg->system_temp_level)
 								* PD_6P5V_PERCENT / 100;
 				else if (chg->voltage_min_uv >= PD_MICRO_6P5V
 							&& chg->voltage_min_uv < PD_MICRO_7P5V)
 					thermal_icl_ua =
-							chg->thermal_mitigation_pd_base[chg->system_temp_level]
+							smblib_therm_val(chg->thermal_mitigation_pd_base,
+					chg->thermal_mitigation_pd_base_levels, chg->system_temp_level)
 								* PD_7P5V_PERCENT / 100;
 				else if (chg->voltage_min_uv >= PD_MICRO_7P5V
 							&& chg->voltage_min_uv <= PD_MICRO_8P5V)
 					thermal_icl_ua =
-							chg->thermal_mitigation_pd_base[chg->system_temp_level]
+							smblib_therm_val(chg->thermal_mitigation_pd_base,
+					chg->thermal_mitigation_pd_base_levels, chg->system_temp_level)
 								* PD_8P5V_PERCENT / 100;
 				else if (chg->voltage_min_uv >= PD_MICRO_8P5V)
 					thermal_icl_ua =
-							chg->thermal_mitigation_pd_base[chg->system_temp_level]
+							smblib_therm_val(chg->thermal_mitigation_pd_base,
+					chg->thermal_mitigation_pd_base_levels, chg->system_temp_level)
 								* PD_9V_PERCENT / 100;
 				else
 					thermal_icl_ua =
-							chg->thermal_mitigation_pd_base[chg->system_temp_level];
+							smblib_therm_val(chg->thermal_mitigation_pd_base,
+					chg->thermal_mitigation_pd_base_levels, chg->system_temp_level);
 			}
 		}
 		break;
 	case POWER_SUPPLY_TYPE_USB_DCP:
 	default:
-		thermal_icl_ua = chg->thermal_mitigation_dcp[chg->system_temp_level];
+		thermal_icl_ua = smblib_therm_val(chg->thermal_mitigation_dcp,
+					chg->thermal_mitigation_dcp_levels, chg->system_temp_level);
 		break;
 	}
 
@@ -3155,7 +3185,8 @@ static int smblib_therm_charging(struct smb_charger *chg)
 			/* if use qc3 or pps charge with cp, also limit icl when high level */
 			if (chg->system_temp_level >= ICL_LIMIT_LEVEL_THR)
 				thermal_icl_ua =
-						chg->thermal_mitigation_icl[chg->system_temp_level];
+						smblib_therm_val(chg->thermal_mitigation_icl,
+					chg->thermal_mitigation_icl_levels, chg->system_temp_level);
 			if (chg->system_temp_level >= ICL_LIMIT_LEVEL_THR) {
 				rc = vote(chg->usb_icl_votable, THERMAL_DAEMON_VOTER,
 						true, thermal_icl_ua);
